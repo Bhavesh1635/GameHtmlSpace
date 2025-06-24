@@ -1,16 +1,6 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "3rdpage.html",
-        "use": "@vercel/static"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/",
-        "dest": "/3rdpage.html"
-      }
-    ]
-  }
-  
+  "rewrites": [
+    { "source": "/", "destination": "/html/index.html" },
+    { "source": "/game.html", "destination": "/html/game.html" }
+  ]
+}
