@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PowerPlay Zone - Level Select</title>
+<style>
+  body {
+    margin: 0; font-family: sans-serif; background: linear-gradient(to bottom, #87ceeb 0%, #228B22 90%);
+    color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;
+  }
+  h1 {
+    font-size: 3rem; margin-bottom: 1rem; text-shadow: 1px 1px 5px #000;
+  }
+  .levels {
+    display: flex; gap: 20px;
+  }
+  .level-btn {
+    background: #444;
+    padding: 20px 40px;
+    border-radius: 15px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    box-shadow: 0 0 10px #222 inset;
+    transition: background 0.3s ease;
+  }
+  .level-btn:hover {
+    background: #666;
+  }
+  .locked {
+    filter: grayscale(100%) brightness(0.6);
+    cursor: not-allowed;
+  }
+  .lock-icon {
+    position: absolute;
+    top: 5px; right: 8px;
+    font-size: 1.5rem;
+    color: gold;
+  }
+</style>
+</head>
+<body>
+
+<h1>Select a Level</h1>
+<div class="levels">
+  <div class="level-btn" data-level="1">Level 1</div>
+  <div class="level-btn locked" data-level="2">Level 2 <span class="lock-icon">🔒</span></div>
+  <div class="level-btn locked" data-level="3">Level 3 <span class="lock-icon">🔒</span></div>
+</div>
+
+<audio id="lockBreakSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3" preload="auto"></audio>
+
+<script>
+  const lockBreakSound = document.getElementById('lockBreakSound');
+
+  // We'll store unlocked levels in localStorage so progress persists
+  const unlockedLevels = JSON.parse(localStorage.getItem('unlockedLevels')) || [1];
+
+  const levelButtons = document.querySelectorAll('.level-btn');
+
+  function updateButtons() {
+    levelButtons.forEach(btn => {
+      const level = parseInt(btn.dataset.level);
+      if (unlockedLevels.includes(level)) {
+        btn.classList.remove('locked');
+        btn.querySelector('.lock-icon')?.remove();
+      } else {
+        btn.classList.add('locked');
+        if (!btn.querySelector('.lock-icon')) {
+          const lockSpan = document.createElement('span');
+          lockSpan.textContent = '🔒';
+          lockSpan.classList.add('lock-icon');
+          btn.appendChild(lockSpan);
+        }
+      }
+    });
+  }
+
+  updateButtons();
+
+  levelButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const level = parseInt(btn.dataset.level);
+      if (unlockedLevels.includes(level)) {
+        // Go to game with chosen level
+        window.location.href = `game.html?level=${level}`;
+      } else {
+        alert('This level is locked. Complete previous levels to unlock!');
+      }
+    });
+  });
+
+  // Function to unlock next level, called by game when player finishes a level
+  window.unlockLevel = function(level) {
+    if (!unlockedLevels.includes(level)) {
+      unlockedLevels.push(level);
+      localStorage.setItem('unlockedLevels', JSON.stringify(unlockedLevels));
+      updateButtons();
+      lockBreakSound.play();
+      alert(`Level ${level} unlocked!`);
+    }
+  };
+</script>
+
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Duck Coin Dash - Level Game</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden; height: 100%; font-family: sans-serif;
+    background: linear-gradient(to bottom, #87ceeb 0%, #228B22 90%);
+  }
+  canvas {
+    display: block;
+    background: transparent;
+  }
+  #scoreboard, #levelMessage, #menu {
+    position: absolute;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 1px 1px 2px black;
+    z-index: 10;
+  }
+  #scoreboard { top: 10px; left: 10px; }
+  #levelMessage {
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    display: none;
+    text-align: center;
+  }
+  #menu {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 20px 40px;
+    border-radius: 15px;
+    display: none;
+    text-align: center;
+  }
+  #menu button {
+    font-size: 18px;
+    padding: 10px 20px;
+    margin-top: 15px;
+    cursor: pointer;
+    background: gold;
+    border: none;
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="scoreboard">Score: 0</div>
+<div id="levelMessage"></div>
+<div id="menu">
+  <p id="menuText"></p>
+  <audio id="lockSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3" preload="auto"></audio>
+  <button id="menuButton"></button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let ground;
+let level = 1;
+let score = 0;
+let gameOver = false;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ground = canvas.height - 120;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+const duckImg = new Image();
+duckImg.src = "https://i.ibb.co/6R4V5twX/image.png";
+
+const butcherImg = new Image();
+butcherImg.src = "https://i.ibb.co/KzbRZ1h8/Man-with-knife.jpg";
+
+const coinImg = new Image();
+coinImg.src = "https://i.ibb.co/6cmk34z5/Coins.jpg";
+
+const coinSound = new Audio("https://www.soundjay.com/button/sounds/button-16.mp3");
+const deathSound = new Audio("https://www.soundjay.com/button/sounds/button-10.mp3");
+const lockSound = document.getElementById("lockSound");
+const bgMusic = new Audio("https://cdn.pixabay.com/download/audio/2022/03/20/audio_8c0c9e8b8b.mp3?filename=retro-video-game-loop-ambient-background-10245.mp3");
+bgMusic.loop = true;
+bgMusic.volume = 0.3;
+
+// Read level from URL param
+const urlParams = new URLSearchParams(window.location.search);
+level = parseInt(urlParams.get("level")) || 1;
+
+// Difficulty adjustments by level
+const difficultySettings = {
+  1: { butcherSpeed: 3, coinSpawnInterval: 2000 },
+  2: { butcherSpeed: 5, coinSpawnInterval: 1500 },
+  3: { butcherSpeed: 7, coinSpawnInterval: 1000 },
+};
+
+let butcherSpeed = difficultySettings[level].butcherSpeed;
+let coinSpawnInterval = difficultySettings[level].coinSpawnInterval;
+
+let duck = { x: 50, y: 0, w: 120, h: 120, vy: 0, speedX: 0, onGround: true, jumps: 2 };
+let butcher = { x: 700, y: 0, w: 120, h: 120, speed: butcherSpeed, facingRight: false };
+let coins = [];
+
+function resetEntities() {
+  duck.x = canvas.width * 0.05;
+  duck.y = ground - duck.h;
+  duck.vy = 0;
+  duck.speedX = 0;
+  duck.onGround = true;
+  duck.jumps = 2;
+
+  butcher.w = 120;
+  butcher.h = 120;
+  butcher.x = canvas.width * 0.85;
+  butcher.y = ground - butcher.h;
+  butcher.speed = butcherSpeed;
+  butcher.facingRight = false;
+
+  coins = [];
+}
+
+function spawnCoin() {
+  coins.push({
+    x: canvas.width + 50,
+    y: ground - 100 - Math.random() * 150,
+    w: 50,
+    h: 50
+  });
+}
+let coinTimer = setInterval(spawnCoin, coinSpawnInterval);
+
+function drawBackground() {
+  ctx.fillStyle = "#228B22";
+  ctx.fillRect(0, ground, canvas.width, canvas.height - ground);
+  // Clouds
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.ellipse(150, 80, 60, 40, 0, 0, 2 * Math.PI);
+  ctx.ellipse(220, 80, 50, 35, 0, 0, 2 * Math.PI);
+  ctx.ellipse(190, 100, 55, 30, 0, 0, 2 * Math.PI);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(canvas.width - 180, 120, 70, 40, 0, 0, 2 * Math.PI);
+  ctx.ellipse(canvas.width - 120, 120, 60, 35, 0, 0, 2 * Math.PI);
+  ctx.ellipse(canvas.width - 150, 140, 55, 30, 0, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+function drawImage(img, obj) {
+  ctx.drawImage(img, obj.x, obj.y, obj.w, obj.h);
+}
+
+function updateDuck() {
+  duck.vy += 0.4; // gravity (slower)
+  duck.y += duck.vy;
+  duck.x += duck.speedX;
+
+  if (duck.y > ground - duck.h) {
+    duck.y = ground - duck.h;
+    duck.vy = 0;
+    duck.onGround = true;
+    duck.jumps = 2;
+  }
+
+  if (duck.x < 0) duck.x = 0;
+  if (duck.x + duck.w > canvas.width) duck.x = canvas.width - duck.w;
+}
+
+function updateButcher() {
+  const dx = duck.x - butcher.x;
+  if (dx > 5) {
+    butcher.x += butcher.speed;
+    butcher.facingRight = true;
+  } else if (dx < -5) {
+    butcher.x -= butcher.speed;
+    butcher.facingRight = false;
+  }
+
+  if (butcher.x < 0) butcher.x = 0;
+  if (butcher.x + butcher.w > canvas.width) butcher.x = canvas.width - butcher.w;
+}
+
+function collide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function checkCollisions() {
+  coins = coins.filter(c => {
+    c.x -= 3;
+    drawImage(coinImg, c);
+    if (collide(duck, c)) {
+      score += 100;
+      coinSound.play();
+      document.getElementById("scoreboard").textContent = "Score: " + score;
+      if (score >= 1000) levelComplete();
+      return false;
+    }
+    return c.x > -c.w;
+  });
+
+  if (collide(duck, butcher) && duck.y + duck.h > butcher.y + 20) {
+    deathSound.play();
+    gameOver = true;
+    bgMusic.pause();
+    showMessage("Duck Over!");
+  }
+}
+
+function showMessage(text) {
+  const msg = document.getElementById("levelMessage");
+  msg.textContent = text;
+  msg.style.display = "block";
+
+  setTimeout(() => {
+    msg.style.display = "none";
+    showMenu(text === "Duck Over!" ? "Try Again?" : "Unlocking next level...", text === "Duck Over!");
+  }, 2000);
+}
+
+function showMenu(text, isGameOver) {
+  const menu = document.getElementById("menu");
+  const menuText = document.getElementById("menuText");
+  const btn = document.getElementById("menuButton");
+
+  menu.style.display = "block";
+  menuText.textContent = text;
+
+  btn.textContent = isGameOver ? "Restart Game" : "Next Level";
+
+  btn.onclick = () => {
+    menu.style.display = "none";
+    if (isGameOver) {
+      restartGame();
+    } else {
+      unlockAndNextLevel();
+    }
+  };
+
+  if (!isGameOver) lockSound.play();
+}
+
+function unlockAndNextLevel() {
+  // Unlock next level in menu (index.html) via localStorage and reload index.html after next level or on last level
+  if (level < 3) {
+    // Unlock next level in localStorage
+    let unlockedLevels = JSON.parse(localStorage.getItem('unlockedLevels')) || [1];
+    if (!unlockedLevels.includes(level + 1)) {
+      unlockedLevels.push(level + 1);
+      localStorage.setItem('unlockedLevels', JSON.stringify(unlockedLevels));
+    }
+    level++;
+    score = 0;
+    gameOver = false;
+    resetEntities();
+    document.getElementById("scoreboard").textContent = "Score: 0";
+    bgMusic.play();
+    requestAnimationFrame(gameLoop);
+  } else {
+    alert("🎉 You beat all levels! Returning to menu.");
+    window.location.href = "index.html";
+  }
+}
+
+function levelComplete() {
+  gameOver = true;
+  bgMusic.pause();
+  showMessage(`Level ${level} Completed!`);
+}
+
+function restartGame() {
+  score = 0;
+  gameOver = false;
+  document.getElementById("scoreboard").textContent = "Score: 0";
+  resetEntities();
+  bgMusic.play();
+  requestAnimationFrame(gameLoop);
+}
+
+function gameLoop() {
+  if (gameOver) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+
+  updateDuck();
+  updateButcher();
+
+  drawImage(duckImg, duck);
+
+  ctx.save();
+  if (!butcher.facingRight) {
+    ctx.translate(butcher.x + butcher.w / 2, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-(butcher.x + butcher.w / 2), 0);
+  }
+  drawImage(butcherImg, butcher);
+  ctx.restore();
+
+  checkCollisions();
+  requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener("keydown", e => {
+  if (gameOver) return;
+  if (e.code === "ArrowLeft") duck.speedX = -5;
+  if (e.code === "ArrowRight") duck.speedX = 5;
+  if ((e.code === "ArrowUp" || e.code === "Space") && duck.jumps > 0) {
+    duck.vy = duck.jumps === 2 ? -9 : -7;
+    duck.jumps--;
+  }
+});
+
+document.addEventListener("keyup", e => {
+  if (e.code === "ArrowLeft" || e.code === "ArrowRight") duck.speedX = 0;
+});
+
+resetEntities();
+bgMusic.play();
+requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>
